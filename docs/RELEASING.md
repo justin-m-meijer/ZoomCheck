@@ -1,11 +1,11 @@
 # Releasing
 
-Every push to `main` builds a universal app on GitHub Actions and attaches it as a workflow artifact. Pushing a tag that starts with `v` also publishes a GitHub Release:
+Every push to `main` builds a universal app on GitHub Actions and attaches it as a workflow artifact.
 
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
+To publish a GitHub Release, either:
+
+- go to Actions → **Build** → **Run workflow**, enter a version such as `0.2.0`, and run it (the workflow creates the `v0.2.0` tag and the release), or
+- push a tag yourself: `git tag v0.2.0 && git push origin v0.2.0`
 
 ## Signing and notarization (optional, recommended)
 
