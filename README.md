@@ -14,7 +14,7 @@ Everything runs locally. Nothing leaves your Mac.
 
 ## Download
 
-Get the latest `ZoomCheck-vX.Y.Z.zip` from [Releases](../../releases), unzip it and move ZoomCheck to Applications. It runs on Apple silicon and Intel Macs.
+Get the latest `ZoomCheck-vX.Y.Z.dmg` from [Releases](../../releases), open it and drag ZoomCheck to Applications. It runs on Apple silicon and Intel Macs.
 
 If a release is marked as not notarized, macOS blocks the first launch. Open ZoomCheck once, then go to System Settings → Privacy & Security and click **Open Anyway**.
 

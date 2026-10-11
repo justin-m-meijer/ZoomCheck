@@ -62,34 +62,39 @@ jobs:
             --entitlements Resources/ZoomCheck.entitlements \
             --sign "$IDENTITY" build/ZoomCheck.app
           codesign --verify --strict --verbose=2 build/ZoomCheck.app
+          echo "IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
-      - name: Notarize and staple
+      - name: Create DMG
+        run: |
+          NAME="ZoomCheck-${GITHUB_REF_NAME//\//-}"
+          STAGE="$RUNNER_TEMP/dmg"
+          mkdir -p "$STAGE"
+          cp -R build/ZoomCheck.app "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname ZoomCheck -srcfolder "$STAGE" -ov -format UDZO "build/$NAME.dmg"
+          echo "DMG=build/$NAME.dmg" >> "$GITHUB_ENV"
+
+      - name: Sign, notarize and staple DMG
         if: env.HAS_SIGNING == 'true'
         env:
           NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: |
+          codesign --force --timestamp --sign "$IDENTITY" "$DMG"
           echo "$NOTARY_KEY" | base64 --decode > "$RUNNER_TEMP/notary.p8"
-          ditto -c -k --keepParent build/ZoomCheck.app build/notarize.zip
-          xcrun notarytool submit build/notarize.zip \
+          xcrun notarytool submit "$DMG" \
             --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" \
             --wait
-          rm "$RUNNER_TEMP/notary.p8" build/notarize.zip
-          xcrun stapler staple build/ZoomCheck.app
-          spctl --assess --type execute --verbose build/ZoomCheck.app
-
-      - name: Package
-        run: |
-          NAME="ZoomCheck-${GITHUB_REF_NAME//\//-}"
-          ditto -c -k --keepParent build/ZoomCheck.app "build/$NAME.zip"
-          echo "ZIP=build/$NAME.zip" >> "$GITHUB_ENV"
+          rm "$RUNNER_TEMP/notary.p8"
+          xcrun stapler staple "$DMG"
+          spctl --assess --type open --context context:primary-signature --verbose "$DMG"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ZoomCheck
-          path: ${{ env.ZIP }}
+          path: ${{ env.DMG }}
 
       - name: Publish release
         if: env.IS_RELEASE == 'true'
@@ -97,8 +102,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [[ "$HAS_SIGNING" == "true" ]]; then
-            NOTES="Signed and notarized by Apple. Unzip, move ZoomCheck to Applications and open it."
+            NOTES="Signed and notarized by Apple. Open the DMG, drag ZoomCheck to Applications and open it."
           else
             NOTES="⚠️ Not notarized. macOS will block the first launch: open ZoomCheck once, then go to System Settings → Privacy & Security and click **Open Anyway**."
           fi
-          gh release create "$GITHUB_REF_NAME" "$ZIP" --title "ZoomCheck $GITHUB_REF_NAME" --notes "$NOTES" --generate-notes
+          gh release create "$GITHUB_REF_NAME" "$DMG" --title "ZoomCheck $GITHUB_REF_NAME" --notes "$NOTES" --generate-notes
