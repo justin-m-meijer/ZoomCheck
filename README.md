@@ -58,4 +58,4 @@ ZoomCheck copies `Photos.sqlite` (plus its `-wal`/`-shm` files) to a temporary f
 
 ## License
 
-To be decided (EUPL-1.2 or MIT).
+MIT. See [LICENSE](LICENSE).
