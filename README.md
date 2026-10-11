@@ -18,6 +18,9 @@ The foldable iPhone Duo has no dedicated telephoto camera and tops out at 2x, so
 - Optional filters: region (rough bounding box, or a custom one) and date range, e.g. a single trip
 - One click to put the "lost" photos in a Photos album, which syncs to your iPhone via iCloud
 
+<img width="1200" height="830" alt="image" src="https://github.com/user-attachments/assets/5906ead9-a114-4787-880b-e444f6762cef" />
+
+
 ## Download
 
 Get the latest `ZoomCheck-vX.Y.Z.dmg` from [Releases](../../releases), open it and drag ZoomCheck to Applications. It runs on Apple silicon and Intel Macs.
