@@ -4,6 +4,10 @@ How often do you really use your iPhone's telephoto lens? ZoomCheck reads your P
 
 Everything runs locally. Nothing leaves your Mac.
 
+### Thinking about the iPhone Duo?
+
+The foldable iPhone Duo has no dedicated telephoto camera and tops out at 2x, so anything you now shoot at 3x, 4x or 5x would have to be cropped from 2x, at a fraction of the resolution. Set **Highest zoom** to **2x** and ZoomCheck shows exactly how many of your photos that affects, overall or for a single trip, and puts them in an album so you can judge whether you'd miss them.
+
 ## What it shows
 
 - Your iPhone photos split into 0.5x, 1x, 2x up to the target zoom, and above the target zoom
