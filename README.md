@@ -12,13 +12,19 @@ Everything runs locally. Nothing leaves your Mac.
 - Optional filters: region (rough bounding box, or a custom one) and date range, e.g. a single trip
 - One click to put the "lost" photos in a Photos album, which syncs to your iPhone via iCloud
 
+## Download
+
+Get the latest `ZoomCheck-vX.Y.Z.zip` from [Releases](../../releases), unzip it and move ZoomCheck to Applications. It runs on Apple silicon and Intel Macs.
+
+If a release is marked as not notarized, macOS blocks the first launch. Open ZoomCheck once, then go to System Settings → Privacy & Security and click **Open Anyway**.
+
 ## Requirements
 
 - macOS 14 Sonoma or later
 - Xcode or the Xcode Command Line Tools (`xcode-select --install`)
 - Photos library on the Mac with iCloud Photos (originals do **not** need to be downloaded)
 
-## Build and run
+## Build from source
 
 ```bash
 git clone <repo-url> ZoomCheck
