@@ -26,6 +26,8 @@
     <string>public.app-category.photography</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>ZoomCheck asks Photos to add photos to an album when PhotoKit can't.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>ZoomCheck creates an album in Photos with the photos you shot beyond the zoom you are comparing against.</string>
 </dict>

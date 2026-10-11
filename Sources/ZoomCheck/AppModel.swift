@@ -82,8 +82,12 @@ final class AppModel {
         isCreatingAlbum = true
         albumStatus = nil
         do {
-            let count = try await AlbumCreator.createAlbum(named: name, uuids: uuids)
-            albumStatus = "Created album “\(name)” with \(count) photos."
+            let outcome = try await AlbumCreator.addToAlbum(named: name, uuids: uuids)
+            var status = "Added \(outcome.added) photos to the album “\(outcome.name)”."
+            if outcome.skipped > 0 {
+                status += " \(outcome.skipped) couldn't be added (for example photos from shared albums)."
+            }
+            albumStatus = status
         } catch {
             albumStatus = error.localizedDescription
         }
