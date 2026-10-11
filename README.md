@@ -1,3 +1,5 @@
+<p align="center"><img src="Resources/AppIcon.png" width="128" alt="ZoomCheck icon"></p>
+
 # ZoomCheck
 
 How often do you really use your iPhone's telephoto lens? ZoomCheck reads your Photos library on the Mac and shows how many of your photos were taken above a given zoom level, so you can judge whether a phone with less zoom (say, one that tops out at 2x) would cost you shots you care about.
