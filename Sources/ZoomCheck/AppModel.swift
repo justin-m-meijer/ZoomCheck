@@ -214,7 +214,7 @@ final class AppModel {
                 let (uuid, outcome) = next
                 switch outcome {
                 case .record(let record): cache[uuid] = PhotoKitScanner.CachedItem(record: record)
-                case .ignored: cache[uuid] = PhotoKitScanner.CachedItem(record: nil)
+                case .ignored(let note): cache[uuid] = PhotoKitScanner.CachedItem(record: nil, note: note)
                 case .unavailable: scanUnavailable += 1
                 }
                 scanDone += 1

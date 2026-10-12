@@ -13,7 +13,8 @@ enum PhotoKitScanner {
         /// An iPhone photo or video with zoom data.
         case record(PhotoRecord)
         /// Read successfully, but not usable (other camera, no zoom data). Cached, never read again.
-        case ignored
+        /// The note says why, to help diagnose items that should have been usable.
+        case ignored(String?)
         /// Couldn't be read now (e.g. a video only in iCloud). Not cached, retried on the next scan.
         case unavailable
     }
@@ -57,8 +58,13 @@ enum PhotoKitScanner {
     }
 
     struct CachedItem: Codable {
+        /// Bump when reading improves, so items ignored by an older version are read again.
+        static let currentVersion = 2
+
         /// nil when the item was read but isn't usable.
         var record: PhotoRecord?
+        var note: String? = nil
+        var version: Int? = CachedItem.currentVersion
     }
 
     /// The ZUUID part of a local identifier ("<UUID>/L0/001"), matching the database mode.
@@ -122,7 +128,7 @@ enum PhotoKitScanner {
         guard let resource = resources.first(where: { $0.type == .photo })
                 ?? resources.first(where: { $0.type == .fullSizePhoto })
                 ?? resources.first
-        else { return .ignored }
+        else { return .ignored(nil) }
 
         let options = PHAssetResourceRequestOptions()
         options.isNetworkAccessAllowed = true
@@ -143,7 +149,7 @@ enum PhotoKitScanner {
                     if error != nil {
                         state.finish(.unavailable)
                     } else {
-                        state.finish(parsePhoto(state.allData(), final: true, info: info) ?? .ignored)
+                        state.finish(parsePhoto(state.allData(), final: true, info: info) ?? .ignored(nil))
                     }
                 }
             )
@@ -159,15 +165,15 @@ enum PhotoKitScanner {
               let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any],
               let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any],
               let make = tiff[kCGImagePropertyTIFFMake] as? String
-        else { return final ? .ignored : nil }
+        else { return final ? .ignored(nil) : nil }
 
-        guard make.trimmingCharacters(in: .whitespaces) == "Apple" else { return .ignored }
+        guard make.trimmingCharacters(in: .whitespaces) == "Apple" else { return .ignored("make \(make)") }
 
         let mm35 = (exif[kCGImagePropertyExifFocalLenIn35mmFilm] as? NSNumber)?.intValue ?? 0
         let lensModel = exif[kCGImagePropertyExifLensModel] as? String
         let exifFocal = (exif[kCGImagePropertyExifFocalLength] as? NSNumber)?.doubleValue ?? 0
         let focal = exifFocal > 0 ? exifFocal : lensModel.flatMap(PhotosDatabase.focalLength(fromLensModel:))
-        guard mm35 > 0 || focal != nil else { return final ? .ignored : nil }
+        guard mm35 > 0 || focal != nil else { return final ? .ignored(nil) : nil }
 
         return .record(info.record(mm35: mm35, focal: focal, lensModel: lensModel,
                                    model: tiff[kCGImagePropertyTIFFModel] as? String))
@@ -185,30 +191,51 @@ enum PhotoKitScanner {
             }
         }
         guard let avAsset else { return .unavailable }
-        guard let items = try? await avAsset.load(.metadata) else { return .unavailable }
 
-        func item(_ suffix: String) -> AVMetadataItem? {
-            items.first { ($0.identifier?.rawValue ?? "").hasSuffix(suffix) }
+        // QuickTime keeps make, model and lens in its own metadata format; gather every format to be safe.
+        var items: [AVMetadataItem] = (try? await avAsset.load(.metadata)) ?? []
+        items += (try? await avAsset.load(.commonMetadata)) ?? []
+        if let formats = try? await avAsset.load(.availableMetadataFormats) {
+            for format in formats {
+                items += (try? await avAsset.loadMetadata(for: format)) ?? []
+            }
         }
-        func string(_ suffix: String) async -> String? {
-            guard let item = item(suffix) else { return nil }
-            return try? await item.load(.stringValue)
+
+        func name(_ item: AVMetadataItem) -> String {
+            [item.identifier?.rawValue, item.key as? String].compactMap { $0 }.joined(separator: " ").lowercased()
         }
-        func number(_ suffix: String) async -> NSNumber? {
-            guard let item = item(suffix) else { return nil }
-            if let number = try? await item.load(.numberValue) { return number }
-            if let text = try? await item.load(.stringValue), let value = Double(text) { return NSNumber(value: value) }
+        func string(_ keys: [String]) async -> String? {
+            for item in items where keys.contains(where: { name(item).contains($0) }) {
+                if let value = try? await item.load(.stringValue), !value.isEmpty { return value }
+            }
+            return nil
+        }
+        func number(_ keys: [String]) async -> NSNumber? {
+            for item in items where keys.contains(where: { name(item).contains($0) }) {
+                if let number = try? await item.load(.numberValue) { return number }
+                if let text = try? await item.load(.stringValue), let value = Double(text) { return NSNumber(value: value) }
+            }
             return nil
         }
 
-        guard await string("quicktime.make") == "Apple" else { return .ignored }
-        let lensModel = await string("camera.lens_model")
-        let mm35 = await number("camera.focal_length.35mm_equivalent")?.intValue ?? 0
-        let focal = lensModel.flatMap(PhotosDatabase.focalLength(fromLensModel:))
-        guard mm35 > 0 || focal != nil else { return .ignored }
+        let make = await string(["quicktime.make", "common/make", "©mak"])
+        let model = await string(["quicktime.model", "common/model", "©mod"])
+        let lensModel = await string(["camera.lens_model"])
+        let mm35 = await number(["focal_length.35mm_equivalent"])?.intValue ?? 0
 
-        return .record(info.record(mm35: mm35, focal: focal, lensModel: lensModel,
-                                   model: await string("quicktime.model")))
+        let looksApple = [model, lensModel].contains { $0?.contains("iPhone") == true || $0?.contains("iPad") == true }
+        if let make, make.trimmingCharacters(in: .whitespaces) != "Apple", !looksApple {
+            return .ignored("make \(make)")
+        }
+        guard make != nil || looksApple else {
+            return .ignored("no make; metadata: " + items.map(name).prefix(40).joined(separator: ", "))
+        }
+
+        let focal = lensModel.flatMap(PhotosDatabase.focalLength(fromLensModel:))
+        guard mm35 > 0 || focal != nil else {
+            return .ignored("no lens or zoom; metadata: " + items.map(name).prefix(40).joined(separator: ", "))
+        }
+        return .record(info.record(mm35: mm35, focal: focal, lensModel: lensModel, model: model))
     }
 
     // MARK: - Cache
@@ -219,8 +246,11 @@ enum PhotoKitScanner {
     }
 
     static func loadCache() -> [String: CachedItem] {
-        guard let url = cacheURL, let data = try? Data(contentsOf: url) else { return [:] }
-        return (try? JSONDecoder().decode([String: CachedItem].self, from: data)) ?? [:]
+        guard let url = cacheURL, let data = try? Data(contentsOf: url),
+              let cache = try? JSONDecoder().decode([String: CachedItem].self, from: data)
+        else { return [:] }
+        // Read items again that an older version couldn't use.
+        return cache.filter { $0.value.record != nil || ($0.value.version ?? 1) >= CachedItem.currentVersion }
     }
 
     static func clearCache() {
