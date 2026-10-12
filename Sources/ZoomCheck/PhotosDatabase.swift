@@ -1,13 +1,15 @@
 import Foundation
 import SQLite3
 
-/// One iPhone photo with the metadata ZoomCheck needs.
+/// One iPhone photo or video with the metadata ZoomCheck needs.
 struct PhotoRecord: Sendable {
     let uuid: String
-    /// 35mm-equivalent focal length (reflects the zoom level, including main-camera crops).
+    let isVideo: Bool
+    /// 35mm-equivalent focal length (reflects the zoom level, including main-camera crops). 0 when unknown.
     let mm35: Int
-    /// Real focal length of the lens that took the photo, in mm.
-    let focal: Double
+    /// Real focal length of the lens, in mm: from EXIF, or parsed from the lens model. nil when unknown.
+    let focal: Double?
+    let isFrontCamera: Bool
     let model: String
     let date: Date?
     let latitude: Double?
@@ -49,17 +51,16 @@ enum PhotosDatabase {
 
     private static let requiredColumns: [String: [String]] = [
         "ZASSET": ["Z_PK", "ZUUID", "ZKIND", "ZTRASHEDSTATE", "ZDATECREATED", "ZLATITUDE", "ZLONGITUDE"],
-        "ZEXTENDEDATTRIBUTES": ["ZASSET", "ZFOCALLENGTHIN35MM", "ZFOCALLENGTH", "ZCAMERAMAKE", "ZCAMERAMODEL"],
+        "ZEXTENDEDATTRIBUTES": ["ZASSET", "ZFOCALLENGTHIN35MM", "ZFOCALLENGTH", "ZCAMERAMAKE", "ZCAMERAMODEL", "ZLENSMODEL"],
     ]
 
     private static let query = """
         SELECT a.ZUUID, e.ZFOCALLENGTHIN35MM, e.ZFOCALLENGTH, e.ZCAMERAMODEL,
-               a.ZDATECREATED, a.ZLATITUDE, a.ZLONGITUDE
+               a.ZDATECREATED, a.ZLATITUDE, a.ZLONGITUDE, a.ZKIND, e.ZLENSMODEL
         FROM ZASSET a
         JOIN ZEXTENDEDATTRIBUTES e ON e.ZASSET = a.Z_PK
         WHERE e.ZCAMERAMAKE = 'Apple'
-          AND e.ZFOCALLENGTHIN35MM > 0
-          AND a.ZKIND = 0
+          AND a.ZKIND IN (0, 1)
           AND a.ZTRASHEDSTATE = 0
         """
 
@@ -150,10 +151,19 @@ enum PhotosDatabase {
                 }
             }
 
+            let lensModel = text(statement, 8)
+            let exifFocal = sqlite3_column_double(statement, 2)
+            let mm35 = Int(sqlite3_column_int64(statement, 1))
+            let focal: Double? = exifFocal > 0 ? exifFocal : lensModel.flatMap(focalLength(fromLensModel:))
+            // Without a 35mm value or a lens there is nothing to classify.
+            guard mm35 > 0 || focal != nil else { continue }
+
             records.append(PhotoRecord(
                 uuid: uuid,
-                mm35: Int(sqlite3_column_int64(statement, 1)),
-                focal: sqlite3_column_double(statement, 2),
+                isVideo: sqlite3_column_int64(statement, 7) == 1,
+                mm35: mm35,
+                focal: focal,
+                isFrontCamera: lensModel?.localizedCaseInsensitiveContains("front") ?? false,
                 model: text(statement, 3) ?? "Unknown iPhone",
                 date: date,
                 latitude: latitude,
@@ -174,6 +184,13 @@ enum PhotosDatabase {
             if let name = text(statement, 1) { names.insert(name) }
         }
         return names
+    }
+
+    /// "iPhone 17 Pro Max back camera 16.891mm f/2.8" → 16.891 (also handles a decimal comma).
+    static func focalLength(fromLensModel lens: String) -> Double? {
+        guard let match = lens.firstMatch(of: #/([0-9]+(?:[.,][0-9]+)?)\s*mm/#) else { return nil }
+        let value = Double(match.1.replacingOccurrences(of: ",", with: "."))
+        return value.flatMap { $0 > 0 ? $0 : nil }
     }
 
     private static func text(_ statement: OpaquePointer?, _ index: Int32) -> String? {

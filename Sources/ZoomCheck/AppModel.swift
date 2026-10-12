@@ -8,7 +8,8 @@ final class AppModel {
 
     var libraryURL = PhotosDatabase.defaultLibraryURL
     var records: [PhotoRecord] = []
-    var mainFocal: [String: Double] = [:]
+    var profile = CameraProfile()
+    var availableModels: [(model: String, count: Int)] = []
     var isLoading = false
     var loadError: PhotosDatabaseError?
     var otherError: String?
@@ -19,6 +20,8 @@ final class AppModel {
     var customLatMax = 46.0
     var customLonMin = 122.0
     var customLonMax = 146.0
+    var includeVideos = true
+    var excludedModels: Set<String> = []
     var useDateRange = false
     var startDate = Calendar.current.date(byAdding: .year, value: -1, to: .now) ?? .now
     var endDate = Date.now
@@ -45,11 +48,12 @@ final class AppModel {
             let end = calendar.date(byAdding: DateComponents(day: 1, second: -1), to: endDay) ?? endDay
             range = start...end
         }
-        return Filters(targetZoom: targetZoom, region: region, dateRange: range)
+        return Filters(targetZoom: targetZoom, region: region, dateRange: range,
+                       includeVideos: includeVideos, excludedModels: excludedModels)
     }
 
     var result: AnalysisResult {
-        Analysis.run(records: records, mainFocal: mainFocal, filters: filters)
+        Analysis.run(records: records, profile: profile, filters: filters)
     }
 
     func load() async {
@@ -63,7 +67,9 @@ final class AppModel {
                 try PhotosDatabase.load(libraryURL: url)
             }.value
             records = loaded
-            mainFocal = Analysis.mainFocalByModel(loaded)
+            profile = Analysis.profile(loaded)
+            availableModels = Analysis.modelCounts(loaded)
+            excludedModels = excludedModels.intersection(Set(availableModels.map(\.model)))
         } catch let error as PhotosDatabaseError {
             records = []
             loadError = error
@@ -83,9 +89,9 @@ final class AppModel {
         albumStatus = nil
         do {
             let outcome = try await AlbumCreator.addToAlbum(named: name, uuids: uuids)
-            var status = "Added \(outcome.added) photos to the album “\(outcome.name)”."
+            var status = "Added \(outcome.added) items to the album “\(outcome.name)”."
             if outcome.skipped > 0 {
-                status += " \(outcome.skipped) couldn't be added (for example photos from shared albums)."
+                status += " \(outcome.skipped) couldn't be added (for example items from shared albums)."
             }
             albumStatus = status
         } catch {

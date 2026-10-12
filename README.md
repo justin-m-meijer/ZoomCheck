@@ -12,9 +12,9 @@ The foldable iPhone Duo has no dedicated telephoto camera and tops out at 2x, so
 
 ## What it shows
 
-- Your iPhone photos split into 0.5x, 1x, 2x up to the target zoom, and above the target zoom
+- Your iPhone photos and videos split into 0.5x, 1x, 2x up to the target zoom, and above the target zoom
 - Above the target, a split between **real telephoto shots** (what you'd lose) and **main-camera crops** (the other phone can do those too)
-- Breakdown per iPhone model
+- Breakdown per iPhone model, and a switch per model to leave out photos that aren't yours (e.g. a partner's iPhone)
 - Optional filters: region (rough bounding box, or a custom one) and date range, e.g. a single trip
 - One click to put the "lost" photos in a Photos album, which syncs to your iPhone via iCloud
 
@@ -59,8 +59,9 @@ The zoom level of a photo isn't stored as "2x". iPhones record two focal lengths
 
 On recent Pro models, 2x is a crop of the 48 MP main sensor: same lens, same real focal length as 1x, only the 35mm value doubles (24 → 48 mm). Photos keeps both values in its own database (`ZEXTENDEDATTRIBUTES`), so ZoomCheck can read them without downloading any originals from iCloud.
 
-- **Zoom level** = 35mm value ÷ 24 mm, with a 15% margin so older 52 mm "2x" lenses count as 2x
+- **Zoom level** = 35mm value ÷ the model's own 1x (24 mm on recent iPhones, 26–28 mm on older ones, learned from your photos), with a 15% margin
 - **Crop vs. telephoto**: for each iPhone model ZoomCheck finds the real focal length of its 1x shots (the main camera). A photo above the target whose real focal length matches that is a crop; otherwise it came from a telephoto lens.
+- **Videos**: Photos stores the 35mm value for videos from some iPhones only. For the others ZoomCheck uses the lens the video was shot with (e.g. "back camera 16.891mm") and the zoom level that lens has in your photos. On recent iPhones 1x and 2x share the main lens, so a 2x video counts as 1x; anything shot with the telephoto lens is still recognised.
 
 ZoomCheck copies `Photos.sqlite` (plus its `-wal`/`-shm` files) to a temporary folder, reads the copy and deletes it. The live library is never opened for writing. Album creation goes through Apple's PhotoKit API.
 

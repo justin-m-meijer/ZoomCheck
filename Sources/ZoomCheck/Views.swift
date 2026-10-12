@@ -34,7 +34,8 @@ struct SettingsView: View {
                         .disabled(model.isLoading)
                 }
                 if !model.records.isEmpty {
-                    Text("\(model.records.count.formatted()) iPhone photos with zoom data")
+                    let videos = model.records.filter(\.isVideo).count
+                    Text("\((model.records.count - videos).formatted()) iPhone photos and \(videos.formatted()) videos with zoom or lens data")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -50,6 +51,31 @@ struct SettingsView: View {
                 Text("Phone to compare with")
             } footer: {
                 Text("The highest zoom the other phone takes at full quality. Everything you shot above it with a telephoto lens is what you'd lose.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Include videos", isOn: $model.includeVideos)
+                ForEach(model.availableModels, id: \.model) { entry in
+                    Toggle(isOn: Binding(
+                        get: { !model.excludedModels.contains(entry.model) },
+                        set: { included in
+                            if included { model.excludedModels.remove(entry.model) }
+                            else { model.excludedModels.insert(entry.model) }
+                        }
+                    )) {
+                        HStack {
+                            Text(entry.model)
+                            Spacer()
+                            Text(entry.count.formatted()).foregroundStyle(.secondary).monospacedDigit()
+                        }
+                    }
+                }
+            } header: {
+                Text("What")
+            } footer: {
+                Text("Turn off iPhones that aren't yours, e.g. a partner's photos saved to your library. Videos are classified by lens: on recent iPhones 1x and 2x share a lens, so a 2x video counts as 1x.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -139,9 +165,10 @@ struct SummaryView: View {
         let lost = result.count(.beyondTele)
         let crops = result.count(.beyondCrop)
         let targetText = ZoomFormat.string(target)
+        let noun = result.videos == 0 ? "photos" : (result.photos == 0 ? "videos" : "photos and videos")
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("\(lost.formatted()) of \(result.total.formatted()) photos (\(percent(result.percent(.beyondTele))))")
+            Text("\(lost.formatted()) of \(result.total.formatted()) \(noun) (\(percent(result.percent(.beyondTele))))")
                 .font(.system(size: 32, weight: .semibold))
             Text("were taken above \(targetText) with a telephoto lens. A phone that tops out at \(targetText) could only crop to these, at lower resolution.")
                 .foregroundStyle(.secondary)
@@ -151,7 +178,7 @@ struct SummaryView: View {
                     .foregroundStyle(.secondary)
             }
             if hasRegion && result.excludedWithoutLocation > 0 {
-                Text("\(result.excludedWithoutLocation.formatted()) photos without location were left out. Use a date range instead to include them.")
+                Text("\(result.excludedWithoutLocation.formatted()) items without location were left out. Use a date range instead to include them.")
                     .font(.callout)
                     .foregroundStyle(.orange)
             }
@@ -200,7 +227,8 @@ struct ModelTable: View {
             Text("Per camera").font(.headline)
             Table(rows) {
                 TableColumn("Camera") { Text($0.id) }
-                TableColumn("Photos") { Text($0.total.formatted()) }
+                TableColumn("Photos") { Text($0.photos.formatted()) }
+                TableColumn("Videos") { Text($0.videos.formatted()) }
                 TableColumn("Above target · telephoto") { Text($0.beyondTele.formatted()) }
                 TableColumn("Above target · crop") { Text($0.beyondCrop.formatted()) }
             }
@@ -219,7 +247,7 @@ struct AlbumActions: View {
                 Button {
                     Task { await model.createAlbum() }
                 } label: {
-                    Text("Create album with these \(result.beyondTeleUUIDs.count) photos")
+                    Text("Create album with these \(result.beyondTeleUUIDs.count) items")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(result.beyondTeleUUIDs.isEmpty || model.isCreatingAlbum)
