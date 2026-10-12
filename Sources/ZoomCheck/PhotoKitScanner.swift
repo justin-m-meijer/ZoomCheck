@@ -213,7 +213,7 @@ enum PhotoKitScanner {
 
     // MARK: - Cache
 
-    private static var cacheURL: URL? {
+    static var cacheURL: URL? {
         guard let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
         return support.appendingPathComponent("ZoomCheck/photokit-cache.json")
     }
@@ -228,10 +228,18 @@ enum PhotoKitScanner {
         try? FileManager.default.removeItem(at: url)
     }
 
-    static func saveCache(_ cache: [String: CachedItem]) {
-        guard let url = cacheURL, let data = try? JSONEncoder().encode(cache) else { return }
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: url, options: .atomic)
+    /// Returns a description of what went wrong, or nil when the cache was written.
+    @discardableResult
+    static func saveCache(_ cache: [String: CachedItem]) -> String? {
+        guard let url = cacheURL else { return "No Application Support folder found." }
+        do {
+            let data = try JSONEncoder().encode(cache)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: url, options: .atomic)
+            return nil
+        } catch {
+            return "Couldn't save scanned results to \(url.path): \(error.localizedDescription)"
+        }
     }
 }
 

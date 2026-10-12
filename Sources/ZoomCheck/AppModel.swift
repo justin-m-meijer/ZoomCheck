@@ -48,6 +48,7 @@ final class AppModel {
     var scanDone = 0
     var scanTotal = 0
     var scanUnavailable = 0
+    var cacheError: String?
     private var cache: [String: PhotoKitScanner.CachedItem] = [:]
     private var scanTask: Task<Void, Never>?
 
@@ -114,6 +115,28 @@ final class AppModel {
             otherError = error.localizedDescription
         }
         isLoading = false
+    }
+
+    /// Tries the database again; stays in Photos access mode when Full Disk Access is still missing.
+    /// Returns false in that case.
+    func switchToFastMode() async -> Bool {
+        guard !isScanning else { return false }
+        isLoading = true
+        defer { isLoading = false }
+        let url = libraryURL
+        do {
+            let loaded = try await Task.detached(priority: .userInitiated) {
+                try PhotosDatabase.load(libraryURL: url)
+            }.value
+            mode = .database
+            loadError = nil
+            otherError = nil
+            albumStatus = nil
+            apply(records: loaded)
+            return true
+        } catch {
+            return false
+        }
     }
 
     private func apply(records loaded: [PhotoRecord]) {
@@ -207,7 +230,7 @@ final class AppModel {
             }
         }
 
-        PhotoKitScanner.saveCache(cache)
+        cacheError = PhotoKitScanner.saveCache(cache)
         apply(records: cache.values.compactMap(\.record))
         isScanning = false
         await refreshEstimate()

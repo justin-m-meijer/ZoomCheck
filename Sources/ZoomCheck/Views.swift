@@ -35,6 +35,8 @@ struct SettingsView: View {
                         Button("Reload") { Task { await model.load() } }
                             .disabled(model.isLoading)
                     }
+                    Button("Use Photos access mode instead") { Task { await model.enterPhotoKitMode() } }
+                        .help("Reads each original through Apple's Photos API instead of the database. Slower, but doesn't need Full Disk Access.")
                 } else {
                     Label("Photos access mode", systemImage: "photo.on.rectangle.angled")
                     Text("ZoomCheck opens each original to read its zoom level, downloading it from iCloud if needed. Narrow it down with a date range or region first. Results are remembered.")
@@ -43,8 +45,23 @@ struct SettingsView: View {
                     Toggle("Download videos stored only in iCloud", isOn: $model.allowICloudVideoDownloads)
                     Button("Forget scanned results", role: .destructive, action: model.clearCache)
                         .disabled(model.isScanning || model.records.isEmpty)
-                    Button("Use fast mode…", action: openFullDiskAccessSettings)
-                        .help("Fast mode reads the Photos database directly. Give ZoomCheck Full Disk Access, then quit and reopen it.")
+                    Button("Use fast mode") {
+                        Task {
+                            if await !model.switchToFastMode() { openFullDiskAccessSettings() }
+                        }
+                    }
+                    .help("Fast mode reads the Photos database directly and needs Full Disk Access. Without it, this opens the setting; quit and reopen ZoomCheck after turning it on.")
+                    if let path = PhotoKitScanner.cacheURL?.path {
+                        Text("Scanned results: \(path)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                    if let error = model.cacheError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 }
                 if !model.records.isEmpty {
                     let videos = model.records.filter(\.isVideo).count
