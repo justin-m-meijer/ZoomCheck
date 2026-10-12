@@ -13,6 +13,7 @@ struct ContentView: View {
             ResultsView(model: model)
         }
         .task { await model.load() }
+        .task(id: model.estimateKey) { await model.refreshEstimate() }
     }
 }
 
@@ -24,14 +25,24 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Photos library") {
-                Text(model.libraryURL.lastPathComponent)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(model.libraryURL.path)
-                HStack {
-                    Button("Choose…", action: chooseLibrary)
-                    Button("Reload") { Task { await model.load() } }
-                        .disabled(model.isLoading)
+                if model.mode == .database {
+                    Text(model.libraryURL.lastPathComponent)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(model.libraryURL.path)
+                    HStack {
+                        Button("Choose…", action: chooseLibrary)
+                        Button("Reload") { Task { await model.load() } }
+                            .disabled(model.isLoading)
+                    }
+                } else {
+                    Label("Photos access mode", systemImage: "photo.on.rectangle.angled")
+                    Text("ZoomCheck opens each original to read its zoom level, downloading it from iCloud if needed. Narrow it down with a date range or region first. Results are remembered.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Toggle("Download videos stored only in iCloud", isOn: $model.allowICloudVideoDownloads)
+                    Button("Use fast mode…", action: openFullDiskAccessSettings)
+                        .help("Fast mode reads the Photos database directly. Give ZoomCheck Full Disk Access, then quit and reopen it.")
                 }
                 if !model.records.isEmpty {
                     let videos = model.records.filter(\.isVideo).count
@@ -107,6 +118,12 @@ struct SettingsView: View {
         .formStyle(.grouped)
     }
 
+    private func openFullDiskAccessSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     private func chooseLibrary() {
         let panel = NSOpenPanel()
         panel.message = "Choose your Photos library (.photoslibrary)"
@@ -135,24 +152,108 @@ struct ResultsView: View {
             LoadErrorView(error: error) { Task { await model.load() } }
         } else if let message = model.otherError {
             ContentUnavailableView("Something went wrong", systemImage: "exclamationmark.triangle", description: Text(message))
+        } else if model.mode == .photoKit && !model.photoAccessGranted {
+            PhotoAccessView()
         } else {
             let result = model.result
-            if result.total == 0 {
-                ContentUnavailableView("No photos match", systemImage: "photo.on.rectangle",
-                                       description: Text("Try another region or date range."))
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        SummaryView(result: result, target: model.targetZoom, hasRegion: model.region != nil)
-                        BucketChart(result: result, target: model.targetZoom)
-                        ModelTable(rows: result.models)
-                        AlbumActions(model: model, result: result)
+            VStack(spacing: 0) {
+                if model.mode == .photoKit {
+                    ScanPanel(model: model)
+                        .padding([.horizontal, .top], 24)
+                }
+                if result.total == 0 {
+                    ContentUnavailableView(
+                        model.mode == .photoKit && !model.pendingAssets.isEmpty ? "Nothing scanned yet" : "No photos match",
+                        systemImage: "photo.on.rectangle",
+                        description: Text(model.mode == .photoKit && !model.pendingAssets.isEmpty
+                                          ? "Scan the matching items to see your zoom levels."
+                                          : "Try another region or date range.")
+                    )
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 24) {
+                            SummaryView(result: result, target: model.targetZoom, hasRegion: model.region != nil)
+                            BucketChart(result: result, target: model.targetZoom)
+                            ModelTable(rows: result.models)
+                            AlbumActions(model: model, result: result)
+                        }
+                        .padding(24)
+                        .frame(maxWidth: 820, alignment: .leading)
                     }
-                    .padding(24)
-                    .frame(maxWidth: 820, alignment: .leading)
                 }
             }
         }
+    }
+}
+
+struct ScanPanel: View {
+    let model: AppModel
+
+    var body: some View {
+        GroupBox {
+            if model.isScanning {
+                VStack(alignment: .leading, spacing: 8) {
+                    ProgressView(value: Double(model.scanDone), total: Double(max(model.scanTotal, 1))) {
+                        Text("Reading \(model.scanDone.formatted()) of \(model.scanTotal.formatted())…")
+                    }
+                    Button("Stop", action: model.cancelScan)
+                }
+                .padding(4)
+            } else {
+                HStack(alignment: .center, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        let pending = model.pendingAssets.count
+                        Text("\((model.matchingCount - pending).formatted()) of \(model.matchingCount.formatted()) matching items scanned")
+                            .font(.headline)
+                        if pending > 2000 {
+                            Text("Scanning \(pending.formatted()) items can take a long time and downloads originals from iCloud. A date range or region keeps it quick.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        if model.scanUnavailable > 0 {
+                            Text("\(model.scanUnavailable.formatted()) couldn't be read, e.g. videos stored only in iCloud. They'll be retried next time.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button("Scan \(model.pendingAssets.count.formatted()) items", action: model.startScan)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.pendingAssets.isEmpty)
+                }
+                .padding(4)
+            }
+        }
+    }
+}
+
+struct PhotoAccessView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+            Text("ZoomCheck needs access to your photos")
+                .font(.headline)
+            Text("Allow ZoomCheck under Photos, or give it Full Disk Access for the fast mode. Then quit ZoomCheck (⌘Q) and open it again.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: 440)
+            HStack {
+                Button("Open Photos settings") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Photos") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                Button("Open Full Disk Access settings") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

@@ -27,6 +27,19 @@ Get the latest `ZoomCheck-vX.Y.Z.dmg` from [Releases](../../releases), open it a
 
 If a release is marked as not notarized, macOS blocks the first launch. Open ZoomCheck once, then go to System Settings → Privacy & Security and click **Open Anyway**.
 
+## Two ways to read your library
+
+| | Fast mode | Photos access mode |
+|---|---|---|
+| Permission | Full Disk Access | Regular Photos access |
+| How | Reads a copy of the Photos database | Opens each original through Apple's PhotoKit |
+| Whole library | Seconds | Slow; originals in iCloud get downloaded |
+| A single trip | Seconds | A minute or two |
+
+ZoomCheck starts in fast mode when it has Full Disk Access, and otherwise asks for Photos access and uses Photos access mode. In that mode, pick a date range or region first, then click **Scan**. ZoomCheck only opens the items that match and remembers what it read, so a second scan is instant. For photos it stops downloading as soon as the metadata has been read. Videos stored only in iCloud are skipped unless you turn on downloading them.
+
+To switch to fast mode, give ZoomCheck Full Disk Access in System Settings → Privacy & Security, then quit and reopen it.
+
 ## Requirements
 
 - macOS 14 Sonoma or later
@@ -63,14 +76,14 @@ On recent Pro models, 2x is a crop of the 48 MP main sensor: same lens, same rea
 - **Crop vs. telephoto**: for each iPhone model ZoomCheck finds the real focal length of its 1x shots (the main camera). A photo above the target whose real focal length matches that is a crop; otherwise it came from a telephoto lens.
 - **Videos**: Photos stores the 35mm value for videos from some iPhones only. For the others ZoomCheck uses the lens the video was shot with (e.g. "back camera 16.891mm") and the zoom level that lens has in your photos. On recent iPhones 1x and 2x share the main lens, so a 2x video counts as 1x; anything shot with the telephoto lens is still recognised.
 
-ZoomCheck copies `Photos.sqlite` (plus its `-wal`/`-shm` files) to a temporary folder, reads the copy and deletes it. The live library is never opened for writing. Album creation goes through Apple's PhotoKit API.
+In fast mode ZoomCheck copies `Photos.sqlite` (plus its `-wal`/`-shm` files) to a temporary folder, reads the copy and deletes it. The live library is never opened for writing. In Photos access mode it reads the same EXIF and QuickTime fields from the originals. Album creation goes through Apple's PhotoKit API in both modes.
 
 ## Limitations
 
-- Reads Apple's private, undocumented database schema. A macOS update can change it. ZoomCheck checks the columns it needs on every load and shows which ones are missing instead of giving wrong numbers.
+- Fast mode reads Apple's private, undocumented database schema. A macOS update can change it. ZoomCheck checks the columns it needs on every load and shows which ones are missing instead of giving wrong numbers. Photos access mode doesn't depend on it.
 - iPhone photos only (`Make = Apple`). Dedicated cameras with zoom lenses don't have a fixed "1x".
 - Region filters are rectangles and overlap slightly with neighbouring countries. Photos without location are excluded when a region is set, and the app tells you how many.
-- Not suitable for the Mac App Store: the sandbox doesn't allow reading the Photos database directly.
+- Fast mode isn't possible in the Mac App Store, because the sandbox doesn't allow reading the Photos database directly.
 
 ## License
 

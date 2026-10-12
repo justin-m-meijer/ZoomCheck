@@ -2,7 +2,7 @@ import Foundation
 import SQLite3
 
 /// One iPhone photo or video with the metadata ZoomCheck needs.
-struct PhotoRecord: Sendable {
+struct PhotoRecord: Sendable, Codable {
     let uuid: String
     let isVideo: Bool
     /// 35mm-equivalent focal length (reflects the zoom level, including main-camera crops). 0 when unknown.

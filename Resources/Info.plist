@@ -29,6 +29,6 @@
     <key>NSAppleEventsUsageDescription</key>
     <string>ZoomCheck asks Photos to add photos to an album when PhotoKit can't.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>ZoomCheck creates an album in Photos with the photos you shot beyond the zoom you are comparing against.</string>
+    <string>ZoomCheck reads the zoom level of your photos and videos, and can put the ones you shot beyond a zoom level in an album.</string>
 </dict>
 </plist>
