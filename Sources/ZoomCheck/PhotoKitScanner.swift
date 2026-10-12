@@ -223,6 +223,11 @@ enum PhotoKitScanner {
         return (try? JSONDecoder().decode([String: CachedItem].self, from: data)) ?? [:]
     }
 
+    static func clearCache() {
+        guard let url = cacheURL else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
     static func saveCache(_ cache: [String: CachedItem]) {
         guard let url = cacheURL, let data = try? JSONEncoder().encode(cache) else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

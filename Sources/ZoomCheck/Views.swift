@@ -41,6 +41,8 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Toggle("Download videos stored only in iCloud", isOn: $model.allowICloudVideoDownloads)
+                    Button("Forget scanned results", role: .destructive, action: model.clearCache)
+                        .disabled(model.isScanning || model.records.isEmpty)
                     Button("Use fast mode…", action: openFullDiskAccessSettings)
                         .help("Fast mode reads the Photos database directly. Give ZoomCheck Full Disk Access, then quit and reopen it.")
                 }

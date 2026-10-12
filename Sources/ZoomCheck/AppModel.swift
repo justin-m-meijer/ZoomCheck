@@ -146,6 +146,16 @@ final class AppModel {
         pendingAssets = candidates.filter { cache[PhotoKitScanner.uuid(of: $0)] == nil }
     }
 
+    func clearCache() {
+        guard !isScanning else { return }
+        cache = [:]
+        PhotoKitScanner.clearCache()
+        scanUnavailable = 0
+        albumStatus = nil
+        apply(records: [])
+        Task { await refreshEstimate() }
+    }
+
     func startScan() {
         guard !isScanning, !pendingAssets.isEmpty else { return }
         scanTask = Task { await scan() }
