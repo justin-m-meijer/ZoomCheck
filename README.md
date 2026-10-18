@@ -85,6 +85,10 @@ In fast mode ZoomCheck copies `Photos.sqlite` (plus its `-wal`/`-shm` files) to 
 - Region filters are rectangles and overlap slightly with neighbouring countries. Photos without location are excluded when a region is set, and the app tells you how many.
 - Fast mode isn't possible in the Mac App Store, because the sandbox doesn't allow reading the Photos database directly.
 
+## Support
+
+If this is useful to you, you can support my work with a [donation through PayPal](https://www.paypal.com/donate?hosted_button_id=UNBDNLN8MSC88).
+
 ## License
 
 Licensed under the [Mozilla Public License 2.0](LICENSE). You may use, change and share it, also
