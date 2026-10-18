@@ -87,4 +87,6 @@ In fast mode ZoomCheck copies `Photos.sqlite` (plus its `-wal`/`-shm` files) to 
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Licensed under the [Mozilla Public License 2.0](LICENSE). You may use, change and share it, also
+commercially. If you distribute a changed version of these files, those files must stay under the
+MPL 2.0 and their source must be available.
