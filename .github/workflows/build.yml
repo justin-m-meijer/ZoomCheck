@@ -2,9 +2,11 @@ name: Build
 
 # Two jobs:
 # - build:   every push, pull request and manual run. Unsigned, read-only token, no secrets.
-# - release: only for a v* tag or a manual run with a version. Signs, notarizes and publishes. It runs in the
-#            "release" environment, which holds the Apple secrets, only accepts main and v* tags, and waits
-#            for the maintainer's approval. A changed workflow on another branch cannot reach the secrets.
+# - release: only for a v* tag or a manual run with a version. Creates a DRAFT release. It runs in the
+#            "release" environment, which only accepts main and v* tags and waits for the maintainer's
+#            approval. The Apple signing keys are not in GitHub: scripts/sign-release.sh signs, notarizes
+#            and publishes the draft on the maintainer's Mac. (If signing secrets are ever added to the
+#            environment, the job signs and notarizes here too; the release still stays a draft.)
 # Actions are pinned to a commit SHA (the comment says which version).
 
 on:
@@ -157,13 +159,16 @@ jobs:
           name: ZoomCheck-release
           path: ${{ env.DMG }}
 
-      - name: Publish release
+      - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Releases are immutable once published, so this stays a draft: scripts/sign-release.sh replaces the
+          # DMG with a signed and notarized one and publishes it. Publishing the draft as-is gives this note.
           if [[ "$HAS_SIGNING" == "true" ]]; then
             NOTES="Signed and notarized by Apple. Open the DMG, drag ZoomCheck to Applications and open it."
           else
             NOTES="⚠️ Not notarized. macOS will block the first launch: open ZoomCheck once, then go to System Settings → Privacy & Security and click **Open Anyway**."
           fi
-          gh release create "v$VERSION" "$DMG" --target "$GITHUB_SHA" --title "ZoomCheck v$VERSION" --notes "$NOTES" --generate-notes
+          gh release create "v$VERSION" "$DMG" --draft --target "$GITHUB_SHA" --title "ZoomCheck v$VERSION" --notes "$NOTES" --generate-notes
+          echo "::notice title=Draft release::v$VERSION is a draft. Run scripts/sign-release.sh v$VERSION on your Mac to sign, notarize and publish it."

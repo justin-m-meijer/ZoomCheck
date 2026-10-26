@@ -61,6 +61,15 @@ The app is ad-hoc signed. After every rebuild macOS may treat it as a new app, a
 
 For development, `swift run` also works when your terminal app has Full Disk Access. Creating an album only works from the `.app` bundle, because PhotoKit requires the usage description in `Info.plist`.
 
+## Releasing (maintainers)
+
+The Apple signing keys are not stored in GitHub. A release is built by CI and signed on the maintainer's Mac:
+
+1. Push a tag `v1.2.3` (or run the **Build** workflow by hand with a version) and approve the `release` environment. CI creates a **draft** release with an unsigned DMG.
+2. On the Mac with the Developer ID certificate in the keychain and a notarytool profile (`xcrun notarytool store-credentials zoomcheck-notary`), run `scripts/sign-release.sh v1.2.3 --publish`. It signs and notarizes the app, replaces the DMG in the draft and publishes it.
+
+Published releases are immutable, so sign before you publish.
+
 ## How it works
 
 The zoom level of a photo isn't stored as "2x". iPhones record two focal lengths in EXIF:
