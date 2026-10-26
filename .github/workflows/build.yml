@@ -1,5 +1,12 @@
 name: Build
 
+# Two jobs:
+# - build:   every push, pull request and manual run. Unsigned, read-only token, no secrets.
+# - release: only for a v* tag or a manual run with a version. Signs, notarizes and publishes. It runs in the
+#            "release" environment, which holds the Apple secrets, only accepts main and v* tags, and waits
+#            for the maintainer's approval. A changed workflow on another branch cannot reach the secrets.
+# Actions are pinned to a commit SHA (the comment says which version).
+
 on:
   push:
     branches: [main]
@@ -13,16 +20,50 @@ on:
         default: ""
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Build universal app
+        run: UNIVERSAL=1 ./scripts/build-app.sh
+
+      - name: Create DMG
+        run: |
+          NAME="ZoomCheck-${GITHUB_REF_NAME//\//-}"
+          STAGE="$RUNNER_TEMP/dmg"
+          mkdir -p "$STAGE"
+          cp -R build/ZoomCheck.app "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname ZoomCheck -srcfolder "$STAGE" -ov -format UDZO "build/$NAME.dmg"
+          echo "DMG=build/$NAME.dmg" >> "$GITHUB_ENV"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ZoomCheck
+          path: ${{ env.DMG }}
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.release != '')
+    needs: build
+    runs-on: macos-15
+    environment: release
+    permissions:
+      contents: write
     env:
       HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE != '' && secrets.NOTARY_KEY != '' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Determine release version
         env:
@@ -34,22 +75,16 @@ jobs:
           elif [[ -n "$INPUT_RELEASE" ]]; then
             VERSION="${INPUT_RELEASE#v}"
           fi
-          if [[ -n "$VERSION" && ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Release version must look like 1.2.3, got '$VERSION'"
             exit 1
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
-      - name: Show toolchain
-        run: |
-          xcodebuild -version
-          swift --version
-
       - name: Build universal app
         run: UNIVERSAL=1 ./scripts/build-app.sh
 
       - name: Set app version
-        if: env.VERSION != ''
         run: |
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" build/ZoomCheck.app/Contents/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GITHUB_RUN_NUMBER" build/ZoomCheck.app/Contents/Info.plist
@@ -92,7 +127,7 @@ jobs:
 
       - name: Create DMG
         run: |
-          if [[ -n "$VERSION" ]]; then NAME="ZoomCheck-v$VERSION"; else NAME="ZoomCheck-${GITHUB_REF_NAME//\//-}"; fi
+          NAME="ZoomCheck-v$VERSION"
           STAGE="$RUNNER_TEMP/dmg"
           mkdir -p "$STAGE"
           cp -R build/ZoomCheck.app "$STAGE/"
@@ -116,14 +151,13 @@ jobs:
           xcrun stapler staple "$DMG"
           spctl --assess --type open --context context:primary-signature --verbose "$DMG"
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload release artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ZoomCheck
+          name: ZoomCheck-release
           path: ${{ env.DMG }}
 
       - name: Publish release
-        if: env.VERSION != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
